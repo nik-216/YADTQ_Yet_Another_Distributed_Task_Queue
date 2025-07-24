@@ -182,7 +182,7 @@ class YADTQServer:
                         
                         if time_since_last_seen > self.worker_timeout:
                             if worker_state['ver_tries'] < 3:
-                                print(f"\nworker {worker_id} missed heartbeat Verify maadiii")
+                                print(f"\nworker {worker_id} missed heartbeat")
                                 
                                 if self.verify_worker(worker_id):
                                     worker_state['last_seen'] = now_time
@@ -249,6 +249,7 @@ class YADTQServer:
                                                    "type" : task_data.get('task'),
                                                    "status" : "queued",
                                                    "retry_count" : 0,
+                                                   "args": json.dumps(task_data.get("args", {})),
                                                    "created_at" : str(dt.now()),
                                                    "timestamp" : str(dt.now()),
                                                    "error" : ""
@@ -314,7 +315,7 @@ class YADTQServer:
                     result_data_client = {
                           "task_id" : task_id,
                           "client_id" : res_data.get('client_id'),
-                          "task_status" : res_data.get('status'),
+                          "task_status" : res_data.get('task_status'),
                           "result" : res_data.get('result')
                     }
                     self.producer.send(RESULT_TOPIC_CLIENT,value=result_data_client)
@@ -354,7 +355,7 @@ class YADTQServer:
                     print(f"\nerror reading res: {e}")
                 
 
-    def monitor_zombie_tasks(self): # shit thats tehre but not executing
+    def monitor_zombie_tasks(self): 
         while self.running:
             try:
                 tasks_in_progress = []
@@ -366,7 +367,12 @@ class YADTQServer:
 
                 now_time = dt.now()
                 for task_id, task_data in tasks_in_progress:
-                    start_time = dt.fromisoformat(dt(task_data.get('start_time', '')))
+                    start_time_str = task_data.get('start_time', '')
+                    if not start_time_str:
+                        continue  # skip if start_time is missing
+
+                    start_time = dt.fromisoformat(start_time_str)
+
                     runtime = now_time - start_time
                     
                     if runtime > timedelta(seconds = self.worker_timeout):
@@ -464,13 +470,13 @@ class YADTQServer:
     def retry_task(self, task_id):
         try:
             task_key = f"task : {task_id}"
-            task_data = self.redis.hgetall(f"task : {task_id}") # my monkey brain cant think of a better way to id it without changing all the work i hv already done
+            task_data = self.redis.hgetall(f"task : {task_id}")
             if task_data == None:
                 print(f"\ntask {task_id} not in redis, cant retry")
                 return False
             
             retry_count = int(task_data.get('retry_count', 0))
-            client_id = task_data.get('client_id', '') # errorzzz
+            client_id = task_data.get('client_id', '') 
             
             if retry_count >= self.retry_max:   
                 print(f"\ntask {task_id} max retries done")
@@ -521,13 +527,13 @@ class YADTQServer:
             retry_task_message = {
                                   "task_id" : task_id,
                                   "task": task_data.get('type', 'unknown'),
-                                  "args" : task_data.get('args', ''),
+                                  "args": json.loads(task_data.get('args', '{}')),
                                   "retry_count" : (retry_count + 1),
                                   "client_id" : client_id
             }
             
             retry_log_data = {
-                              "timestamp" : dt.now(),
+                              "timestamp" : str(dt.now()),
                               "title" : "Task_Information",
                               "task_id" : task_id,
                               "client_id" : client_id,

@@ -85,8 +85,8 @@ class YADTQClient:
                     file_content = result_data["result"]
                     if dst_file_path:
                         try:
-                            with open(dst_file_path, "w") as file:
-                                file.write(file_content)
+                            with open(dst_file_path, "wb") as file:
+                                file.write(base64.b64decode(file_content))
                             print(f"\n\nTask {task_id} \nResult file saved as {dst_file_path}")
                         except Exception as e:
                             print(f"\n\nTask {task_id} \nError writing to file: {e}")
